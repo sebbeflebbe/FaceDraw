@@ -3,8 +3,8 @@ import time
 from deepface import DeepFace
 
 def detect_faces(frame, face_cascade):
-    scaleFactor = 1.1
-    minNeighbors = 50
+    scaleFactor = 1.05
+    minNeighbors = 20
     faces = face_cascade.detectMultiScale(frame, scaleFactor, minNeighbors)
     return faces
 
@@ -44,7 +44,7 @@ def main():
         if not ret:
             break
 
-        if time.time() - last_analysis_time >= 10:
+        if time.time() - last_analysis_time >= 5:
             last_analysis_time = time.time()
             expression = detect_expression(frame, face_cascade)
             print("Dominant Emotion:", expression)
