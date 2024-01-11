@@ -1,65 +1,53 @@
 import cv2
+import time
 from deepface import DeepFace
 
 def detect_faces(frame, face_cascade):
-    # If you want to use color frames, skip the conversion to grayscale
-    # You can still use grayscale for better performance if color information is not necessary
-    # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    
-    # Adjust the scaleFactor and minNeighbors parameters as needed
-    scaleFactor = 1.7  # Example: try 1.05 for finer scale steps
-    minNeighbors = 2   # Example: try 2 or 3 for fewer restrictions
-    
+    scaleFactor = 1.1
+    minNeighbors = 50
     faces = face_cascade.detectMultiScale(frame, scaleFactor, minNeighbors)
     return faces
 
-
 def detect_expression(frame, face_cascade):
     faces = detect_faces(frame, face_cascade)
+    emotions = []
     if len(faces) == 0:
         return "No face detected"
     
     for (x, y, w, h) in faces:
         face_frame = frame[y:y+h, x:x+w]
-
-        if face_frame.size == 0:
-            print("Empty face frame.")
-            continue
-
         try:
-            analyses = DeepFace.analyze(face_frame, actions=['emotion'], enforce_detection=False)
-
-            # Now iterate over the list of analyses
-            for analysis in analyses:
-                # Debug: Print each analysis result
-                print("Analysis Result:", analysis)
-
-                if 'emotion' in analysis:
-                    emotion_scores = analysis['emotion']
-                    dominant_emotion = max(emotion_scores, key=emotion_scores.get)
-                    print("Dominant emotion:", dominant_emotion)
-                else:
-                    print("Emotion data not found in analysis")
+            analysis_results = DeepFace.analyze(face_frame, actions=['emotion'], enforce_detection=False)
+            
+            if isinstance(analysis_results, list) and len(analysis_results) > 0:
+                analysis = analysis_results[0]
+                emotion_scores = analysis['emotion']
+                dominant_emotion = max(emotion_scores, key=emotion_scores.get)
+                emotions.append(dominant_emotion)
+            else:
+                emotions.append("Emotion data not found")
 
         except Exception as e:
             print(f"Error in emotion detection: {e}")
+            emotions.append("Error in detection")
 
-    return "Emotion analysis complete"
-
-
-
+    return ", ".join(emotions) if emotions else "No face/emotion detected"
 
 def main():
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
     cap = cv2.VideoCapture(0)
+
+    last_analysis_time = time.time()
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        expression = detect_expression(frame, face_cascade)
-        print(expression)
+        if time.time() - last_analysis_time >= 10:
+            last_analysis_time = time.time()
+            expression = detect_expression(frame, face_cascade)
+            print("Dominant Emotion:", expression)
 
         cv2.imshow('Video', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
