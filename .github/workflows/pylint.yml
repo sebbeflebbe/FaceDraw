@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/setup-node
+    - uses: actions/checkout@v2
 
     - name: Install C++ compiler and clang-tidy
       run: |
