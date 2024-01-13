@@ -1,0 +1,22 @@
+name: C++ Linting
+
+on:
+  push:
+    branches: [ '*' ]
+  pull_request:
+    branches: [ '*' ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: C++ Lint
+      uses: cpp-linter/cpp-linter-action@v1
+      with:
+        style: 'file'
+        extensions: 'h,hpp,cpp'
+        tidy-checks: '*'
+        repo-root: '.'
