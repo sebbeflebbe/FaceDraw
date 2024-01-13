@@ -1,7 +1,63 @@
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <vector>
-#include <cstdlib> // for system command
+#include <thread>
+#include <atomic>
+#include <chrono>
+
+std::atomic<bool> finished(false);
+std::atomic<bool> playAlert(false);
+
+void playSound(const std::string& soundFile) {
+    while(!finished.load()) {
+        if(playAlert.load()) {
+            std::string command = "mpg123 " + soundFile;
+            system(command.c_str());
+        }
+        // Sleep briefly to prevent tight loop when not playing
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+}
+
+void eyeDetectionThread(cv::CascadeClassifier& eye_cascade, const int framesThreshold, cv::VideoCapture& cap) {
+    int framesWithoutEyes = 5;
+    cv::Mat frame;
+
+    while (!finished.load()) {
+        cap >> frame;
+        if (frame.empty()) {
+            finished.store(true);
+            break;
+        }
+
+        cv::Mat gray;
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+        cv::equalizeHist(gray, gray);
+
+        std::vector<cv::Rect> eyes;
+        eye_cascade.detectMultiScale(gray, eyes, 1.25, 12);
+
+        for(const auto& eye : eyes) {
+            cv::rectangle(frame, eye, cv::Scalar(0, 255, 0), 2);
+        }
+
+        if (eyes.empty()) {
+            framesWithoutEyes++;
+            if (framesWithoutEyes >= framesThreshold) {
+                playAlert.store(true);
+            }
+        } else {
+            framesWithoutEyes = 0;
+            playAlert.store(false);
+        }
+
+        cv::imshow("Driver Drowsiness Detection", frame);
+        if (cv::waitKey(1) == 'q') {
+            finished.store(true);
+            break;
+        }
+    }
+}
 
 int main() {
     cv::VideoCapture cap(0);
@@ -13,66 +69,21 @@ int main() {
     cap.set(cv::CAP_PROP_FRAME_WIDTH, 640);
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 480);
 
-    cv::CascadeClassifier face_cascade, eye_cascade;
-    if (!face_cascade.load("/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml")) {
-        std::cerr << "Error loading face cascade" << std::endl;
-        return -1;
-    }
+    cv::CascadeClassifier eye_cascade;
     if (!eye_cascade.load("/usr/share/opencv4/haarcascades/haarcascade_eye.xml")) {
         std::cerr << "Error loading eye cascade" << std::endl;
         return -1;
     }
 
-    int framesWithoutEyes = 0;
-    const int framesThreshold = 5; // Number of consecutive frames without eye detection to trigger alert
-    const char* alertSound = "mpg123 ./alarm.mp3"; // Replace with the path to your alert sound file
+    const int framesThreshold = 10;
+    std::thread soundThread(playSound, "./alarm.mp3");
+    std::thread eyeDetectionWorker(eyeDetectionThread, std::ref(eye_cascade), framesThreshold, std::ref(cap));
 
-    while (true) {
-        cv::Mat frame;
-        cap >> frame;
-        if (frame.empty()) break;
-
-        cv::Mat gray;
-        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-        cv::equalizeHist(gray, gray);
-
-        std::vector<cv::Rect> faces;
-        face_cascade.detectMultiScale(gray, faces);
-
-        bool eyesDetected = false;
-        for (const auto& face : faces) {
-            cv::Mat faceROI = gray(face);
-            std::vector<cv::Rect> eyes;
-            eye_cascade.detectMultiScale(faceROI, eyes, 1.25, 15);
-
-            if (!eyes.empty()) {
-                eyesDetected = true;
-                framesWithoutEyes = 0; // Reset the counter as eyes are detected
-
-                // Draw rectangles around the eyes for visualization
-                for (const auto& eye : eyes) {
-                    cv::Rect eye_rect(face.x + eye.x, face.y + eye.y, eye.width, eye.height);
-                    cv::rectangle(frame, eye_rect, cv::Scalar(0, 255, 0), 2);
-                }
-            }
-
-            // Draw rectangle around the face
-            cv::rectangle(frame, face, cv::Scalar(255, 0, 0), 2);
-        }
-
-        if (!eyesDetected) {
-            framesWithoutEyes++;
-            if (framesWithoutEyes >= framesThreshold) {
-                std::cout << "Drowsiness detected!" << std::endl;
-                system(alertSound); // Play sound alert
-                framesWithoutEyes = 0; // Reset counter to avoid continuous sound playing
-            }
-        }
-
-        cv::imshow("Driver Drowsiness Detection", frame);
-        if (cv::waitKey(1) == 'q') {
-            break;
-        }
+    if (eyeDetectionWorker.joinable()) {
+        eyeDetectionWorker.join();
+    }
+    if (soundThread.joinable()) {
+        soundThread.join();
     }
 
     cap.release();
