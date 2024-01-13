@@ -16,5 +16,7 @@ jobs:
     - name: C++ Lint
       uses: cpp-linter/cpp-linter-action@v1
       with:
-        clang-tidy-version: '10'
-        cpp-standard: 'c++17'
+        style: 'file'
+        extensions: 'h,hpp,cpp'
+        tidy-checks: '*'
+        repo-root: '.'
