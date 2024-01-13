@@ -1,4 +1,4 @@
-name: Python Linting
+name: C++ Linting
 
 on:
   push:
@@ -12,16 +12,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.10.12' # Specify the Python version you need
 
-    - name: Install dependencies
+    - name: Install C++ compiler and clang-tidy
       run: |
-        python -m pip install --upgrade pip
-        pip install pylint
+        sudo apt-get update
+        sudo apt-get install -y g++ clang-tidy
 
     - name: Run Linting
       run: |
-        pylint **/*.py
+        clang-tidy --version
+        clang-tidy ./src/**/*.cpp -- -std=c++17
